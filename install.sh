@@ -11,7 +11,7 @@ if [ -z "$NVM_DIR" ]; then
 fi
 
 nvm_latest_version() {
-  echo "v0.23.0"
+  echo "master"
 }
 
 #
@@ -26,11 +26,11 @@ nvm_source() {
   if [ -z "$NVM_SOURCE" ]; then
     local NVM_SOURCE
     if [ "_$NVM_METHOD" = "_script" ]; then
-      NVM_SOURCE="https://raw.githubusercontent.com/creationix/nvm/$(nvm_latest_version)/nvm.sh"
+      NVM_SOURCE="https://raw.githubusercontent.com/cnpm/nvm/$(nvm_latest_version)/nvm.sh"
     elif [ "_$NVM_METHOD" = "_script-nvm-exec" ]; then
-      NVM_SOURCE="https://raw.githubusercontent.com/creationix/nvm/$(nvm_latest_version)/nvm-exec"
+      NVM_SOURCE="https://raw.githubusercontent.com/cnpm/nvm/$(nvm_latest_version)/nvm-exec"
     elif [ "_$NVM_METHOD" = "_git" ] || [ -z "$NVM_METHOD" ]; then
-      NVM_SOURCE="https://github.com/creationix/nvm.git"
+      NVM_SOURCE="https://github.com/cnpm/nvm.git"
     else
       echo >&2 "Unexpected value \"$NVM_METHOD\" for \$NVM_METHOD"
       return 1
