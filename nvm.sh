@@ -72,7 +72,7 @@ unset NVM_SCRIPT_SOURCE 2> /dev/null
 
 # Setup mirror location if not already set
 if [ -z "$NVM_NODEJS_ORG_MIRROR" ]; then
-  export NVM_NODEJS_ORG_MIRROR="https//npm.taobao.org/mirrors/node"
+  export NVM_NODEJS_ORG_MIRROR="http://npm.taobao.org/mirrors/node"
 fi
 
 if [ -z "$NVM_IOJS_ORG_MIRROR" ]; then
@@ -1512,4 +1512,3 @@ elif nvm ls default >/dev/null; then
 elif nvm_rc_version >/dev/null 2>&1; then
   nvm use >/dev/null
 fi
-
