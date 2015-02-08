@@ -69,14 +69,17 @@ if [ -z "$NVM_DIR" ]; then
 fi
 unset NVM_SCRIPT_SOURCE 2> /dev/null
 
+# Force useing China mirrors
+export NVM_NODEJS_ORG_MIRROR="http://npm.taobao.org/mirrors/node"
+export NVM_IOJS_ORG_MIRROR="http://npm.taobao.org/mirrors/iojs"
 
 # Setup mirror location if not already set
 if [ -z "$NVM_NODEJS_ORG_MIRROR" ]; then
-  export NVM_NODEJS_ORG_MIRROR="http://npm.taobao.org/mirrors/node"
+  export NVM_NODEJS_ORG_MIRROR="https://nodejs.org/dist"
 fi
 
 if [ -z "$NVM_IOJS_ORG_MIRROR" ]; then
-  export NVM_IOJS_ORG_MIRROR="http://npm.taobao.org/mirrors/iojs"
+  export NVM_IOJS_ORG_MIRROR="https://iojs.org/dist"
 fi
 if [ -z "$NVM_IOJS_ORG_VERSION_LISTING" ]; then
   export NVM_IOJS_ORG_VERSION_LISTING="$NVM_IOJS_ORG_MIRROR/index.tab"
