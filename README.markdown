@@ -10,6 +10,10 @@ Note: `nvm` does not support Windows (see [#284](https://github.com/creationix/n
  - [nvmw](https://github.com/hakobera/nvmw)
  - [nvm-windows](https://github.com/coreybutler/nvm-windows)
 
+Note: `nvm` does not support [Fish] either (see [#303](https://github.com/creationix/nvm/issues/303)). Two alternatives exist, which are not supported nor developed by us:
+ - [nvm-fish-wrapper](https://github.com/passcod/nvm-fish-wrapper)
+ - [nvm-fish](https://github.com/Alex7Kom/nvm-fish) (does not support iojs)
+
 ### Install script
 
 To install you could use the [install script][2] using cURL:
@@ -37,7 +41,7 @@ Or if you have `git` installed, then just clone it, and check out the latest ver
 
 To activate nvm, you need to source it from your shell:
 
-    source ~/.nvm/nvm.sh
+    . ~/.nvm/nvm.sh
 
 I always add this line to my `~/.bashrc`, `~/.profile`, or `~/.zshrc` file to have it automatically sourced upon login.
 Often I also put in a line to use a specific version of node.
@@ -74,6 +78,27 @@ In place of a version pointer like "0.10", you can use the special default alias
     nvm use stable
     nvm run unstable --version
 
+If you want to install a new version of Node.js and migrate npm packages from a previous version:
+
+    nvm install node --reinstall-packages-from=node
+
+This will first use "nvm version node" to identify the current version you're migrating packages from. Then it resolves the new version to install from the remote server and installs it. Lastly, it runs "nvm reinstall-packages" to reinstall the npm packages from your prior version of Node to the new one.
+
+You can also install and migrate npm packages from specific versions of Node like this:
+
+    nvm install v0.10.40 --reinstall-packages-from=0.10.39
+    nvm install v0.12.7 --reinstall-packages-from=0.12.6
+
+If you want to install [io.js](https://github.com/iojs/io.js/):
+
+    nvm install iojs
+
+If you want to install a new version of io.js and migrate npm packages from a previous version:
+
+    nvm install iojs --reinstall-packages-from=iojs
+
+The same guidelines mentioned for migrating npm packages in Node.js are applicable to io.js.
+
 If you want to use the system-installed version of node, you can use the special default alias "system":
 
     nvm use system
@@ -101,6 +126,13 @@ To use a mirror of the node binaries, set `$NVM_NODEJS_ORG_MIRROR`:
     nvm install 0.10
 
     NVM_NODEJS_ORG_MIRROR=https://nodejs.org/dist nvm install 0.10
+
+To use a mirror of the iojs binaries, set `$NVM_IOJS_ORG_MIRROR`:
+
+    export NVM_IOJS_ORG_MIRROR=https://iojs.org/dist
+    nvm install iojs-v1.0.3
+
+    NVM_IOJS_ORG_MIRROR=https://iojs.org/dist nvm install iojs-v1.0.3
 
 `nvm use` will not, by default, create a "current" symlink. Set `$NVM_SYMLINK_CURRENT` to "true" to enable this behavior, which is sometimes useful for IDEs.
 
@@ -174,17 +206,31 @@ nvm uninstall
 	$ nvm uninstall [tab][tab]
 	my_alias        default        v0.6.21        v0.8.26       v0.10.28
 
+## Compatibility Issues
+`nvm` will encounter some issues if you have some non-default settings set. (see [#606](/../../issues/606))
+The following are known to cause issues:
+
+Inside `~/.npmrc`
+```
+prefix='some/path'
+```
+Environment Variables:
+```
+$NPM_CONFIG_PREFIX
+$PREFIX
+```
+
 ## Problems
 
 If you try to install a node version and the installation fails, be sure to delete the node downloads from src (~/.nvm/src/) or you might get an error when trying to reinstall them again or you might get an error like the following:
 
     curl: (33) HTTP server doesn't seem to support byte ranges. Cannot resume.
 
-Where's my 'sudo node'? Checkout this link:
+Where's my 'sudo node'? Check out this link:
 
 https://github.com/creationix/nvm/issues/43
 
-on Arch Linux and other systems using python3 by default, before running *install* you need to
+On Arch Linux and other systems using python3 by default, before running *install* you need to
 
       export PYTHON=python2
 
@@ -196,4 +242,4 @@ After the v0.8.6 release of node, nvm tries to install from binary packages. But
 [2]: https://github.com/cnpm/nvm/blob/master/install.sh
 [3]: https://travis-ci.org/creationix/nvm
 [Urchin]: https://github.com/scraperwiki/urchin
-
+[Fish]: http://fishshell.com
