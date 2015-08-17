@@ -796,14 +796,6 @@ nvm_ls_remote_iojs_org() {
   echo "$VERSIONS"
 }
 
-# TODO: sample alinode output
-alinode_nvm_download() {
-  echo 'version	date	files	npm	v8	uv	zlib	openssl	modules'
-  echo 'v0.12.6	2015-01-14	linux-armv7l,linux-x64,linux-x86,osx-x64-tar,win-x64-exe,win-x64-msi,win-x86-exe,win-x86-msi'
-  echo 'v0.12.7	2015-01-14	linux-armv7l,linux-x64,linux-x86,osx-x64-tar,win-x64-exe,win-x64-msi,win-x86-exe,win-x86-msi'
-  echo 'v2.5.1	2015-01-14	linux-armv7l,linux-x64,linux-x86,osx-x64-tar,win-x64-exe,win-x64-msi,win-x86-exe,win-x86-msi'
-}
-
 nvm_ls_remote_alinode_org() {
   local PREFIX
   if [ "_$1" = "_std" ]; then
@@ -822,7 +814,8 @@ nvm_ls_remote_alinode_org() {
   else
     PATTERN=".*"
   fi
-  VERSIONS="$(alinode_nvm_download | command sed "
+  VERSIONS="$(nvm_download -L -s "$MIRROR/index.tab" -o - \
+    | command sed "
         1d;
         s/^/$PREFIX-/;
         s/[[:blank:]].*//" \
