@@ -8,4 +8,6 @@ for i in $(seq 1 10)
   mkdir -p ../../../v0.1.$i
   echo 0.2.$i > ../../../alias/test-iojs-$i
   mkdir -p ../../../versions/io.js/v0.2.$i
+  echo 0.3.$i > ../../../alias/test-alinode-$i
+  mkdir -p ../../../versions/alinode/v0.3.$i
 done
