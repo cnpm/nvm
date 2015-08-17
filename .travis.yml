@@ -1,3 +1,4 @@
+sudo: false
 language: c # defaults to ruby
 addons:
   apt_packages:
