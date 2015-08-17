@@ -60,6 +60,10 @@ nvm_has_system_iojs() {
   [ "$(nvm deactivate >/dev/null 2>&1 && command -v iojs)" != '' ]
 }
 
+nvm_has_system_alinode() {
+  [ "$(nvm deactivate >/dev/null 2>&1 && command -v alinode)" != '' ]
+}
+
 nvm_print_npm_version() {
   if nvm_has "npm"; then
     echo " (npm v$(npm --version 2>/dev/null))"
@@ -84,11 +88,16 @@ unset NVM_SCRIPT_SOURCE 2> /dev/null
 
 # Force useing China mirrors
 export NVM_NODEJS_ORG_MIRROR="http://npm.taobao.org/mirrors/node"
+export NVM_ALINODE_ORG_MIRROR="http://alinode.aliyun.com/dist/alinode"
 export NVM_IOJS_ORG_MIRROR="http://npm.taobao.org/mirrors/iojs"
 
 # Setup mirror location if not already set
 if [ -z "$NVM_NODEJS_ORG_MIRROR" ]; then
   export NVM_NODEJS_ORG_MIRROR="https://nodejs.org/dist"
+fi
+
+if [ -z "$NVM_ALINODE_ORG_MIRROR" ]; then
+  export NVM_ALINODE_ORG_MIRROR="http://alinode.aliyun.com/dist/alinode"
 fi
 
 if [ -z "$NVM_IOJS_ORG_MIRROR" ]; then
@@ -170,6 +179,8 @@ nvm_version_dir() {
     echo "$NVM_DIR/versions/node"
   elif [ "_$NVM_WHICH_DIR" = "_iojs" ]; then
     echo "$NVM_DIR/versions/io.js"
+  elif [ "_$NVM_WHICH_DIR" = "_alinode" ]; then
+    echo "$NVM_DIR/versions/alinode"
   elif [ "_$NVM_WHICH_DIR" = "_old" ]; then
     echo "$NVM_DIR"
   else
@@ -190,6 +201,8 @@ nvm_version_path() {
     return 3
   elif nvm_is_iojs_version "$VERSION"; then
     echo "$(nvm_version_dir iojs)/$(nvm_strip_iojs_prefix "$VERSION")"
+  elif nvm_is_alinode_version "$VERSION"; then
+    echo "$(nvm_version_dir alinode)/$(nvm_strip_alinode_prefix "$VERSION")"
   elif nvm_version_greater 0.12.0 "$VERSION"; then
     echo "$(nvm_version_dir old)/$VERSION"
   else
@@ -259,6 +272,9 @@ nvm_remote_version() {
       "_$(nvm_iojs_prefix)")
         VERSION="$(nvm_ls_remote_iojs | tail -n1)"
       ;;
+      "_$(nvm_alinode_prefix)")
+        VERSION="$(nvm_ls_remote_alinode | tail -n1)"
+      ;;
       *)
         VERSION="$(nvm_ls_remote "$PATTERN")"
       ;;
@@ -275,11 +291,16 @@ nvm_remote_version() {
 nvm_remote_versions() {
   local NVM_IOJS_PREFIX
   NVM_IOJS_PREFIX="$(nvm_iojs_prefix)"
+  local NVM_ALINODE_PREFIX
+  NVM_ALINODE_PREFIX="$(nvm_alinode_prefix)"
   local PATTERN
   PATTERN="$1"
   case "_$PATTERN" in
     "_$NVM_IOJS_PREFIX" | "_io.js")
       VERSIONS="$(nvm_ls_remote_iojs)"
+    ;;
+    "_$NVM_ALINODE_PREFIX" | "_alinode")
+      VERSIONS="$(nvm_ls_remote_alinode)"
     ;;
     "_$(nvm_node_prefix)")
       VERSIONS="$(nvm_ls_remote)"
@@ -290,6 +311,7 @@ nvm_remote_versions() {
         return 1
       fi
       VERSIONS="$(echo "$(nvm_ls_remote "$PATTERN")
+$(nvm_ls_remote_alinode "$PATTERN")
 $(nvm_ls_remote_iojs "$PATTERN")" | command grep -v "N/A" | command sed '/^$/d')"
     ;;
   esac
@@ -308,12 +330,14 @@ nvm_is_valid_version() {
   fi
   case "$1" in
     "$(nvm_iojs_prefix)" | \
+    "$(nvm_alinode_prefix)" | \
     "$(nvm_node_prefix)")
       return 0
     ;;
     *)
       local VERSION
       VERSION="$(nvm_strip_iojs_prefix "$1")"
+      VERSION="$(nvm_strip_alinode_prefix "$VERSION")"
       nvm_version_greater "$VERSION"
     ;;
   esac
@@ -325,9 +349,11 @@ nvm_normalize_version() {
 
 nvm_ensure_version_prefix() {
   local NVM_VERSION
-  NVM_VERSION="$(nvm_strip_iojs_prefix "$1" | command sed -e 's/^\([0-9]\)/v\1/g')"
+  NVM_VERSION="$(nvm_strip_iojs_prefix "$1" | nvm_strip_alinode_prefix "$1" | command sed -e 's/^\([0-9]\)/v\1/g')"
   if nvm_is_iojs_version "$1"; then
     echo "$(nvm_add_iojs_prefix "$NVM_VERSION")"
+  elif nvm_is_alinode_version "$1"; then
+    echo "$(nvm_add_alinode_prefix "$NVM_VERSION")"
   else
     echo "$NVM_VERSION"
   fi
@@ -380,8 +406,10 @@ nvm_prepend_path() {
 nvm_binary_available() {
   # binaries started with node 0.8.6
   local FIRST_VERSION_WITH_BINARY
+  local STRIPPED
+  STRIPPED="$(nvm_strip_iojs_prefix $1)"
   FIRST_VERSION_WITH_BINARY="0.8.6"
-  nvm_version_greater_than_or_equal_to "$(nvm_strip_iojs_prefix $1)" "$FIRST_VERSION_WITH_BINARY"
+  nvm_version_greater_than_or_equal_to "$(nvm_strip_alinode_prefix $STRIPPED)" "$FIRST_VERSION_WITH_BINARY"
 }
 
 nvm_alias() {
@@ -409,6 +437,8 @@ nvm_ls_current() {
     echo 'none'
   elif nvm_tree_contains_path "$(nvm_version_dir iojs)" "$NVM_LS_CURRENT_NODE_PATH"; then
     echo "$(nvm_add_iojs_prefix $(iojs --version 2>/dev/null))"
+  elif nvm_tree_contains_path "$(nvm_version_dir alinode)" "$NVM_LS_CURRENT_NODE_PATH"; then
+    echo "$(nvm_add_alinode_prefix $(alinode --version 2>/dev/null))"
   elif nvm_tree_contains_path "$NVM_DIR" "$NVM_LS_CURRENT_NODE_PATH"; then
     local VERSION
     VERSION="$(node --version 2>/dev/null)"
@@ -456,11 +486,14 @@ nvm_resolve_alias() {
   if [ -n "$ALIAS" ] && [ "_$ALIAS" != "_$PATTERN" ]; then
     local NVM_IOJS_PREFIX
     NVM_IOJS_PREFIX="$(nvm_iojs_prefix)"
+    local NVM_ALINODE_PREFIX
+    NVM_ALINODE_PREFIX="$(nvm_alinode_prefix)"
     local NVM_NODE_PREFIX
     NVM_NODE_PREFIX="$(nvm_node_prefix)"
     case "_$ALIAS" in
       "_∞" | \
       "_$NVM_IOJS_PREFIX" | "_$NVM_IOJS_PREFIX-" | \
+      "_$NVM_ALINODE_PREFIX" | "_$NVM_ALINODE_PREFIX-" | \
       "_$NVM_NODE_PREFIX" )
         echo "$ALIAS"
       ;;
@@ -504,6 +537,9 @@ nvm_resolve_local_alias() {
 nvm_iojs_prefix() {
   echo "iojs"
 }
+nvm_alinode_prefix() {
+  echo "alinode"
+}
 nvm_node_prefix() {
   echo "node"
 }
@@ -513,8 +549,17 @@ nvm_is_iojs_version() {
   return 1
 }
 
+nvm_is_alinode_version() {
+  case "$1" in alinode-*) return 0 ;; esac
+  return 1
+}
+
 nvm_add_iojs_prefix() {
   command echo "$(nvm_iojs_prefix)-$(nvm_ensure_version_prefix "$(nvm_strip_iojs_prefix "$1")")"
+}
+
+nvm_add_alinode_prefix() {
+  command echo "$(nvm_alinode_prefix)-$(nvm_ensure_version_prefix "$(nvm_strip_alinode_prefix "$1")")"
 }
 
 nvm_strip_iojs_prefix() {
@@ -524,6 +569,16 @@ nvm_strip_iojs_prefix() {
     echo
   else
     echo "${1#"$NVM_IOJS_PREFIX"-}"
+  fi
+}
+
+nvm_strip_alinode_prefix() {
+  local NVM_ALINODE_PREFIX
+  NVM_ALINODE_PREFIX="$(nvm_alinode_prefix)"
+  if [ "_$1" = "_$NVM_ALINODE_PREFIX" ]; then
+    echo
+  else
+    echo "${1#"$NVM_ALINODE_PREFIX"-}"
   fi
 }
 
@@ -539,17 +594,21 @@ nvm_ls() {
 
   local NVM_IOJS_PREFIX
   NVM_IOJS_PREFIX="$(nvm_iojs_prefix)"
+  local NVM_ALINODE_PREFIX
+  NVM_ALINODE_PREFIX="$(nvm_alinode_prefix)"
   local NVM_NODE_PREFIX
   NVM_NODE_PREFIX="$(nvm_node_prefix)"
   local NVM_VERSION_DIR_IOJS
   NVM_VERSION_DIR_IOJS="$(nvm_version_dir "$NVM_IOJS_PREFIX")"
+  local NVM_VERSION_DIR_ALINODE
+  NVM_VERSION_DIR_ALINODE="$(nvm_version_dir "$NVM_ALINODE_PREFIX")"
   local NVM_VERSION_DIR_NEW
   NVM_VERSION_DIR_NEW="$(nvm_version_dir new)"
   local NVM_VERSION_DIR_OLD
   NVM_VERSION_DIR_OLD="$(nvm_version_dir old)"
 
   case "$PATTERN" in
-    "$NVM_IOJS_PREFIX" | "$NVM_NODE_PREFIX" )
+    "$NVM_IOJS_PREFIX" | "$NVM_ALINODE_PREFIX" | "$NVM_NODE_PREFIX" )
       PATTERN="$PATTERN-"
     ;;
     *)
@@ -570,10 +629,12 @@ nvm_ls() {
       VERSIONS="$PATTERN"
     elif [ -d "$(nvm_version_path "$(nvm_add_iojs_prefix "$PATTERN")")" ]; then
       VERSIONS="$(nvm_add_iojs_prefix "$PATTERN")"
+    elif [ -d "$(nvm_version_path "$(nvm_add_alinode_prefix "$PATTERN")")" ]; then
+      VERSIONS="$(nvm_add_alinode_prefix "$PATTERN")"
     fi
   else
     case "$PATTERN" in
-      "$NVM_IOJS_PREFIX-" | "$NVM_NODE_PREFIX-" | "system") ;;
+      "$NVM_IOJS_PREFIX-" | "$NVM_ALINODE_PREFIX-"  | "$NVM_NODE_PREFIX-" | "system") ;;
       *)
         local NUM_VERSION_GROUPS
         NUM_VERSION_GROUPS="$(nvm_num_version_groups "$PATTERN")"
@@ -600,6 +661,12 @@ nvm_ls() {
       if nvm_has_system_iojs; then
         NVM_ADD_SYSTEM=true
       fi
+    elif nvm_is_alinode_version "$PATTERN"; then
+      NVM_DIRS_TO_TEST_AND_SEARCH="$NVM_VERSION_DIR_ALINODE"
+      PATTERN="$(nvm_strip_alinode_prefix "$PATTERN")"
+      if nvm_has_system_alinode; then
+        NVM_ADD_SYSTEM=true
+      fi
     elif [ "_$PATTERN" = "_$NVM_NODE_PREFIX-" ]; then
       NVM_DIRS_TO_TEST_AND_SEARCH="$NVM_VERSION_DIR_OLD $NVM_VERSION_DIR_NEW"
       PATTERN=''
@@ -607,8 +674,8 @@ nvm_ls() {
         NVM_ADD_SYSTEM=true
       fi
     else
-      NVM_DIRS_TO_TEST_AND_SEARCH="$NVM_VERSION_DIR_OLD $NVM_VERSION_DIR_NEW $NVM_VERSION_DIR_IOJS"
-      if nvm_has_system_iojs || nvm_has_system_node; then
+      NVM_DIRS_TO_TEST_AND_SEARCH="$NVM_VERSION_DIR_OLD $NVM_VERSION_DIR_NEW $NVM_VERSION_DIR_IOJS $NVM_VERSION_DIR_ALINODE"
+      if nvm_has_system_alinode || nvm_has_system_iojs || nvm_has_system_node; then
         NVM_ADD_SYSTEM=true
       fi
     fi
@@ -625,17 +692,21 @@ nvm_ls() {
       VERSIONS="$(command find $NVM_DIRS_TO_SEARCH -maxdepth 1 -type d -name "$PATTERN*" \
         | command sed "
             s#$NVM_VERSION_DIR_IOJS/#$NVM_IOJS_PREFIX-#;
+            s#$NVM_VERSION_DIR_ALINODE/#$NVM_ALINODE_PREFIX-#;
             \#$NVM_VERSION_DIR_IOJS# d;
+            \#$NVM_VERSION_DIR_ALINODE# d;
             s#^$NVM_DIR/##;
             \#^versions\$# d;
             s#^versions/##;
             s#^v#$NVM_NODE_PREFIX-v#;
             s#^\($NVM_IOJS_PREFIX\)[-/]v#\1.v#;
+            s#^\($NVM_ALINODE_PREFIX\)[-/]v#\1.v#;
             s#^\($NVM_NODE_PREFIX\)[-/]v#\1.v#" \
         | command sort -t. -u -k 2.2,2n -k 3,3n -k 4,4n \
         | command sort -s -t- -k1.1,1.1 \
         | command sed "
             s/^\($NVM_IOJS_PREFIX\)\./\1-/;
+            s/^\($NVM_ALINODE_PREFIX\)\./\1-/;
             s/^$NVM_NODE_PREFIX\.//" \
       )"
     fi
@@ -689,6 +760,10 @@ nvm_ls_remote_iojs() {
   nvm_ls_remote_iojs_org std "$NVM_IOJS_ORG_MIRROR" "$1"
 }
 
+nvm_ls_remote_alinode() {
+  nvm_ls_remote_alinode_org std "$NVM_ALINODE_ORG_MIRROR" "$1"
+}
+
 nvm_ls_remote_iojs_org() {
   local PREFIX
   if [ "_$1" = "_std" ]; then
@@ -709,6 +784,45 @@ nvm_ls_remote_iojs_org() {
   fi
   VERSIONS="$(nvm_download -L -s "$MIRROR/index.tab" -o - \
     | command sed "
+        1d;
+        s/^/$PREFIX-/;
+        s/[[:blank:]].*//" \
+    | command grep -w "$PATTERN" \
+    | command sort)"
+  if [ -z "$VERSIONS" ]; then
+    echo "N/A"
+    return 3
+  fi
+  echo "$VERSIONS"
+}
+
+# TODO: sample alinode output
+alinode_nvm_download() {
+  echo 'version	date	files	npm	v8	uv	zlib	openssl	modules'
+  echo 'v0.12.6	2015-01-14	linux-armv7l,linux-x64,linux-x86,osx-x64-tar,win-x64-exe,win-x64-msi,win-x86-exe,win-x86-msi'
+  echo 'v0.12.7	2015-01-14	linux-armv7l,linux-x64,linux-x86,osx-x64-tar,win-x64-exe,win-x64-msi,win-x86-exe,win-x86-msi'
+  echo 'v2.5.1	2015-01-14	linux-armv7l,linux-x64,linux-x86,osx-x64-tar,win-x64-exe,win-x64-msi,win-x86-exe,win-x86-msi'
+}
+
+nvm_ls_remote_alinode_org() {
+  local PREFIX
+  if [ "_$1" = "_std" ]; then
+    PREFIX="$(nvm_alinode_prefix)"
+  else
+    echo "unknown type of alinode release" >&2
+    return 4
+  fi
+  local MIRROR
+  MIRROR="$2"
+  local PATTERN
+  PATTERN="$3"
+  local VERSIONS
+  if [ -n "$PATTERN" ]; then
+    PATTERN="$(nvm_ensure_version_prefix $(nvm_strip_alinode_prefix "$PATTERN"))"
+  else
+    PATTERN=".*"
+  fi
+  VERSIONS="$(alinode_nvm_download | command sed "
         1d;
         s/^/$PREFIX-/;
         s/[[:blank:]].*//" \
@@ -767,15 +881,17 @@ nvm_print_versions() {
 nvm_validate_implicit_alias() {
   local NVM_IOJS_PREFIX
   NVM_IOJS_PREFIX="$(nvm_iojs_prefix)"
+  local NVM_ALINODE_PREFIX
+  NVM_ALINODE_PREFIX="$(nvm_alinode_prefix)"
   local NVM_NODE_PREFIX
   NVM_NODE_PREFIX="$(nvm_node_prefix)"
 
   case "$1" in
-    "stable" | "unstable" | "$NVM_IOJS_PREFIX" | "$NVM_NODE_PREFIX" )
+    "stable" | "unstable" | "$NVM_IOJS_PREFIX" | "$NVM_ALINODE_PREFIX" | "$NVM_NODE_PREFIX" )
       return
     ;;
     *)
-      echo "Only implicit aliases 'stable', 'unstable', '$NVM_IOJS_PREFIX', and '$NVM_NODE_PREFIX' are supported." >&2
+      echo "Only implicit aliases 'stable', 'unstable', '$NVM_IOJS_PREFIX', '$NVM_ALINODE_PREFIX', and '$NVM_NODE_PREFIX' are supported." >&2
       return 1
     ;;
   esac
@@ -797,6 +913,8 @@ nvm_print_implicit_alias() {
 
   local NVM_IOJS_PREFIX
   NVM_IOJS_PREFIX="$(nvm_iojs_prefix)"
+  local NVM_ALINODE_PREFIX
+  NVM_ALINODE_PREFIX="$(nvm_alinode_prefix)"
   local NVM_NODE_PREFIX
   NVM_NODE_PREFIX="$(nvm_node_prefix)"
   local NVM_COMMAND
@@ -826,6 +944,31 @@ nvm_print_implicit_alias() {
       fi
 
       echo "$($NVM_ADD_PREFIX_COMMAND "$NVM_IOJS_VERSION")"
+      return $EXIT_CODE
+    ;;
+    "$NVM_ALINODE_PREFIX" | "$NVM_ALINODE_RC_PREFIX")
+      NVM_COMMAND="nvm_ls_remote_alinode"
+      NVM_ADD_PREFIX_COMMAND="nvm_add_alinode_prefix"
+      if [ "_$1" = "_local" ]; then
+        NVM_COMMAND="nvm_ls "$NVM_IMPLICIT""
+      fi
+
+      ZHS_HAS_SHWORDSPLIT_UNSET=1
+      if nvm_has "setopt"; then
+        ZHS_HAS_SHWORDSPLIT_UNSET=$(setopt | command grep shwordsplit > /dev/null ; echo $?)
+        setopt shwordsplit
+      fi
+
+      local NVM_ALINODE_VERSION
+      NVM_ALINODE_VERSION="$($NVM_COMMAND | sed "s/^"$NVM_IMPLICIT"-//" | command grep -e '^v' | cut -c2- | cut -d . -f 1,2 | uniq | tail -1)"
+      local EXIT_CODE
+      EXIT_CODE="$?"
+
+      if [ $ZHS_HAS_SHWORDSPLIT_UNSET -eq 1 ] && nvm_has "unsetopt"; then
+        unsetopt shwordsplit
+      fi
+
+      echo "$($NVM_ADD_PREFIX_COMMAND "$NVM_ALINODE_VERSION")"
       return $EXIT_CODE
     ;;
     "$NVM_NODE_PREFIX")
@@ -991,6 +1134,73 @@ nvm_install_iojs_binary() {
   return 2
 }
 
+nvm_install_alinode_binary() {
+  local NVM_ALINODE_TYPE
+  NVM_ALINODE_TYPE="$1"
+  local MIRROR
+  if [ "_$NVM_ALINODE_TYPE" = "_std" ]; then
+    MIRROR="$NVM_ALINODE_ORG_MIRROR"
+  else
+    echo "unknown type of alinode release" >&2
+    return 4
+  fi
+  local PREFIXED_VERSION
+  PREFIXED_VERSION="$2"
+  local REINSTALL_PACKAGES_FROM
+  REINSTALL_PACKAGES_FROM="$3"
+
+  if ! nvm_is_alinode_version "$PREFIXED_VERSION"; then
+    echo 'nvm_install_alinode_binary requires an alinode-prefixed version.' >&2
+    return 10
+  fi
+
+  local VERSION
+  VERSION="$(nvm_strip_alinode_prefix "$PREFIXED_VERSION")"
+  local VERSION_PATH
+  VERSION_PATH="$(nvm_version_path "$PREFIXED_VERSION")"
+  local NVM_OS
+  NVM_OS="$(nvm_get_os)"
+  local t
+  local url
+  local sum
+
+  if [ -n "$NVM_OS" ]; then
+    if nvm_binary_available "$VERSION"; then
+      t="$VERSION-$NVM_OS-$(nvm_get_arch)"
+      url="$MIRROR/$VERSION/$(nvm_alinode_prefix)-${t}.tar.gz"
+      sum="$(nvm_download -L -s $MIRROR/$VERSION/SHASUMS256.txt -o - | command grep $(nvm_alinode_prefix)-${t}.tar.gz | command awk '{print $1}')"
+      local tmpdir
+      tmpdir="$NVM_DIR/bin/alinode-${t}"
+      local tmptarball
+      tmptarball="$tmpdir/alinode-${t}.tar.gz"
+      local NVM_INSTALL_ERRORED
+      command mkdir -p "$tmpdir" && \
+        nvm_download -L -C - --progress-bar $url -o "$tmptarball" || \
+        NVM_INSTALL_ERRORED=true
+      if grep '404 Not Found' "$tmptarball" >/dev/null; then
+        NVM_INSTALL_ERRORED=true
+        echo >&2 "HTTP 404 at URL $url";
+      fi
+      if (
+        [ "$NVM_INSTALL_ERRORED" != true ] && \
+        echo "WARNING: checksums are currently disabled for alinode" >&2 && \
+        # nvm_checksum "$tmptarball" $sum && \
+        command tar -xzf "$tmptarball" -C "$tmpdir" --strip-components 1 && \
+        command rm -f "$tmptarball" && \
+        command mkdir -p "$VERSION_PATH" && \
+        command mv "$tmpdir"/* "$VERSION_PATH"
+      ); then
+        return 0
+      else
+        echo >&2 "Binary download failed, trying source." >&2
+        command rm -rf "$tmptarball" "$tmpdir"
+        return 1
+      fi
+    fi
+  fi
+  return 2
+}
+
 nvm_install_node_binary() {
   local VERSION
   VERSION="$1"
@@ -999,6 +1209,11 @@ nvm_install_node_binary() {
 
   if nvm_is_iojs_version "$PREFIXED_VERSION"; then
     echo 'nvm_install_node_binary does not allow an iojs-prefixed version.' >&2
+    return 10
+  fi
+
+  if nvm_is_alinode_version "$PREFIXED_VERSION"; then
+    echo 'nvm_install_node_binary does not allow an alinode-prefixed version.' >&2
     return 10
   fi
 
@@ -1132,11 +1347,16 @@ nvm_install_node_source() {
 nvm_match_version() {
   local NVM_IOJS_PREFIX
   NVM_IOJS_PREFIX="$(nvm_iojs_prefix)"
+  local NVM_ALINODE_PREFIX
+  NVM_ALINODE_PREFIX="$(nvm_alinode_prefix)"
   local PROVIDED_VERSION
   PROVIDED_VERSION="$1"
   case "_$PROVIDED_VERSION" in
     "_$NVM_IOJS_PREFIX" | "_io.js")
       echo "$(nvm_version $NVM_IOJS_PREFIX)"
+    ;;
+    "_$NVM_ALINODE_PREFIX" | "_alinode")
+      echo "$(nvm_version $NVM_ALINODE_PREFIX)"
     ;;
     "_system")
       echo "system"
@@ -1227,7 +1447,7 @@ nvm() {
       echo >&2 "\$SHELL: $SHELL"
       echo >&2 "\$NVM_DIR: $(echo $NVM_DIR | sed "s#$HOME#\$HOME#g")"
       local NVM_DEBUG_OUTPUT
-      for NVM_DEBUG_COMMAND in 'nvm current' 'which node' 'which iojs' 'which npm' 'npm config get prefix' 'npm root -g'
+      for NVM_DEBUG_COMMAND in 'nvm current' 'which node' 'which iojs' 'which alinode' 'which npm' 'npm config get prefix' 'npm root -g'
       do
         NVM_DEBUG_OUTPUT="$($NVM_DEBUG_COMMAND 2>&1 | sed "s#$NVM_DIR#\$NVM_DIR#g")"
         echo >&2 "$NVM_DEBUG_COMMAND: $NVM_DEBUG_OUTPUT"
@@ -1321,6 +1541,11 @@ nvm() {
         NVM_IOJS=true
       fi
 
+      local NVM_ALINODE
+      if nvm_is_alinode_version "$VERSION"; then
+        NVM_ALINODE=true
+      fi
+
       local VERSION_PATH
       VERSION_PATH="$(nvm_version_path "$VERSION")"
       if [ -d "$VERSION_PATH" ]; then
@@ -1343,7 +1568,9 @@ nvm() {
       if [ $nobinary -ne 1 ] && nvm_binary_available "$VERSION"; then
         if [ "$NVM_IOJS" = true ] && nvm_install_iojs_binary std "$VERSION" "$REINSTALL_PACKAGES_FROM"; then
           NVM_INSTALL_SUCCESS=true
-        elif [ "$NVM_IOJS" != true ] && nvm_install_node_binary "$VERSION" "$REINSTALL_PACKAGES_FROM"; then
+        elif [ "$NVM_ALINODE" = true ] && nvm_install_alinode_binary std "$VERSION" "$REINSTALL_PACKAGES_FROM"; then
+          NVM_INSTALL_SUCCESS=true
+        elif [ "$NVM_IOJS" != true ] && [ "$NVM_ALINODE" != true ] && nvm_install_node_binary "$VERSION" "$REINSTALL_PACKAGES_FROM"; then
           NVM_INSTALL_SUCCESS=true
         fi
       fi
@@ -1375,6 +1602,7 @@ nvm() {
       PATTERN="$2"
       case "_$PATTERN" in
         "_$(nvm_iojs_prefix)" | "_$(nvm_iojs_prefix)-" \
+        | "_$(nvm_alinode_prefix)" | "_$(nvm_alinode_prefix)-" \
         | "_$(nvm_node_prefix)" | "_$(nvm_node_prefix)-")
           VERSION="$(nvm_version "$PATTERN")"
         ;;
@@ -1385,6 +1613,8 @@ nvm() {
       if [ "_$VERSION" = "_$(nvm_ls_current)" ]; then
         if nvm_is_iojs_version "$VERSION"; then
           echo "nvm: Cannot uninstall currently-active io.js version, $VERSION (inferred from $PATTERN)." >&2
+        elif nvm_is_alinode_version "$VERSION"; then
+          echo "nvm: Cannot uninstall currently-active alinode version, $VERSION (inferred from $PATTERN)." >&2
         else
           echo "nvm: Cannot uninstall currently-active node version, $VERSION (inferred from $PATTERN)." >&2
         fi
@@ -1405,6 +1635,9 @@ nvm() {
       if nvm_is_iojs_version "$VERSION"; then
         NVM_PREFIX="$(nvm_iojs_prefix)"
         NVM_SUCCESS_MSG="Uninstalled io.js $(nvm_strip_iojs_prefix $VERSION)"
+      elif nvm_is_alinode_version "$VERSION"; then
+        NVM_PREFIX="$(nvm_alinode_prefix)"
+        NVM_SUCCESS_MSG="Uninstalled alinode $(nvm_strip_alinode_prefix $VERSION)"
       else
         NVM_PREFIX="$(nvm_node_prefix)"
         NVM_SUCCESS_MSG="Uninstalled node $VERSION"
@@ -1484,6 +1717,11 @@ nvm() {
             echo "Now using system version of io.js: $(iojs --version 2>/dev/null)$(nvm_print_npm_version)"
           fi
           return
+        elif nvm_has_system_alinode && nvm deactivate >/dev/null 2>&1; then
+          if [ $NVM_USE_SILENT -ne 1 ]; then
+            echo "Now using system version of alinode: $(alinode --version 2>/dev/null)$(nvm_print_npm_version)"
+          fi
+          return
         else
           if [ $NVM_USE_SILENT -ne 1 ]; then
             echo "System version of node not found." >&2
@@ -1533,6 +1771,10 @@ nvm() {
         if [ $NVM_USE_SILENT -ne 1 ]; then
           echo "Now using io.js $(nvm_strip_iojs_prefix "$VERSION")$(nvm_print_npm_version)"
         fi
+      elif nvm_is_alinode_version "$VERSION"; then
+        if [ $NVM_USE_SILENT -ne 1 ]; then
+          echo "Now using alinode $(nvm_strip_alinode_prefix "$VERSION")$(nvm_print_npm_version)"
+        fi
       else
         if [ $NVM_USE_SILENT -ne 1 ]; then
           echo "Now using node $VERSION$(nvm_print_npm_version)"
@@ -1577,6 +1819,11 @@ nvm() {
         NVM_IOJS=true
       fi
 
+      local NVM_ALINODE
+      if nvm_is_alinode_version "$VERSION"; then
+        NVM_ALINODE=true
+      fi
+
       local ARGS
       ARGS="$@"
       local OUTPUT
@@ -1594,6 +1841,8 @@ nvm() {
       elif [ -z "$ARGS" ]; then
         if [ "$NVM_IOJS" = true ]; then
           nvm exec "$VERSION" iojs
+        elif [ "$NVM_ALINODE" = true ]; then
+          nvm exec "$VERSION" alinode
         else
           nvm exec "$VERSION" node
         fi
@@ -1601,6 +1850,10 @@ nvm() {
       elif [ "$NVM_IOJS" = true ]; then
         echo "Running io.js $(nvm_strip_iojs_prefix "$VERSION")"
         OUTPUT="$(nvm use "$VERSION" >/dev/null && iojs $ARGS)"
+        EXIT_CODE="$?"
+      elif [ "$NVM_ALINODE" = true ]; then
+        echo "Running alinode $(nvm_strip_alinode_prefix "$VERSION")"
+        OUTPUT="$(nvm use "$VERSION" >/dev/null && alinode $ARGS)"
         EXIT_CODE="$?"
       else
         echo "Running node $VERSION"
@@ -1656,11 +1909,13 @@ nvm() {
       PATTERN="$2"
       local NVM_IOJS_PREFIX
       NVM_IOJS_PREFIX="$(nvm_iojs_prefix)"
+      local NVM_ALINODE_PREFIX
+      NVM_ALINODE_PREFIX="$(nvm_alinode_prefix)"
       local NVM_NODE_PREFIX
       NVM_NODE_PREFIX="$(nvm_node_prefix)"
       local NVM_FLAVOR
       case "_$PATTERN" in
-        "_$NVM_IOJS_PREFIX" | "_$NVM_NODE_PREFIX" )
+        "_$NVM_IOJS_PREFIX" | "_$NVM_ALINODE_PREFIX" | "_$NVM_NODE_PREFIX" )
           NVM_FLAVOR="$PATTERN"
           PATTERN="$3"
         ;;
@@ -1670,26 +1925,32 @@ nvm() {
       NVM_LS_REMOTE_EXIT_CODE=0
       local NVM_LS_REMOTE_OUTPUT
       NVM_LS_REMOTE_OUTPUT=''
-      if [ "_$NVM_FLAVOR" != "_$NVM_IOJS_PREFIX" ]; then
+      if [ "_$NVM_FLAVOR" != "_$NVM_IOJS_PREFIX" ] && [ "_$NVM_FLAVOR" != "_$NVM_ALINODE_PREFIX" ]; then
         NVM_LS_REMOTE_OUTPUT=$(nvm_ls_remote "$PATTERN")
         NVM_LS_REMOTE_EXIT_CODE=$?
       fi
 
       local NVM_LS_REMOTE_IOJS_EXIT_CODE
       NVM_LS_REMOTE_IOJS_EXIT_CODE=0
+      local NVM_LS_REMOTE_ALINODE_EXIT_CODE
+      NVM_LS_REMOTE_ALINODE_EXIT_CODE=0
       local NVM_LS_REMOTE_IOJS_OUTPUT
       NVM_LS_REMOTE_IOJS_OUTPUT=''
+      local NVM_LS_REMOTE_ALINODE_OUTPUT
+      NVM_LS_REMOTE_ALINODE_OUTPUT=''
       if [ "_$NVM_FLAVOR" != "_$NVM_NODE_PREFIX" ]; then
         NVM_LS_REMOTE_IOJS_OUTPUT=$(nvm_ls_remote_iojs "$PATTERN")
         NVM_LS_REMOTE_IOJS_EXIT_CODE=$?
+        NVM_LS_REMOTE_ALINODE_OUTPUT=$(nvm_ls_remote_alinode "$PATTERN")
+        NVM_LS_REMOTE_ALINODE_EXIT_CODE=$?
       fi
 
       local NVM_OUTPUT
-      NVM_OUTPUT="$(echo "$NVM_LS_REMOTE_OUTPUT
+      NVM_OUTPUT="$(echo "$NVM_LS_REMOTE_OUTPUT $NVM_LS_REMOTE_ALINODE_OUTPUT
 $NVM_LS_REMOTE_IOJS_OUTPUT" | command grep -v "N/A" | sed '/^$/d')"
       if [ -n "$NVM_OUTPUT" ]; then
         nvm_print_versions "$NVM_OUTPUT"
-        return $NVM_LS_REMOTE_EXIT_CODE || $NVM_LS_REMOTE_IOJS_EXIT_CODE
+        return $NVM_LS_REMOTE_EXIT_CODE || $NVM_LS_REMOTE_IOJS_EXIT_CODE || $NVM_LS_REMOTE_ALINODE_EXIT_CODE
       else
         nvm_print_versions "N/A"
         return 3
@@ -1718,7 +1979,7 @@ $NVM_LS_REMOTE_IOJS_OUTPUT" | command grep -v "N/A" | sed '/^$/d')"
       fi
 
       if [ "_$VERSION" = '_system' ]; then
-        if nvm_has_system_iojs >/dev/null 2>&1 || nvm_has_system_node >/dev/null 2>&1; then
+        if nvm_has_system_alinode >/dev/null 2>&1 || nvm_has_system_iojs >/dev/null 2>&1 || nvm_has_system_node >/dev/null 2>&1; then
           local NVM_BIN
           NVM_BIN="$(nvm use system >/dev/null 2>&1 && command which node)"
           if [ -n "$NVM_BIN" ]; then
@@ -1764,7 +2025,7 @@ $NVM_LS_REMOTE_IOJS_OUTPUT" | command grep -v "N/A" | sed '/^$/d')"
           fi
         done
 
-        for ALIAS in "$(nvm_node_prefix)" "stable" "unstable" "$(nvm_iojs_prefix)"; do
+        for ALIAS in "$(nvm_node_prefix)" "stable" "unstable" "$(nvm_iojs_prefix)" "$(nvm_alinode_prefix)"; do
           if [ ! -f "$NVM_ALIAS_DIR/$ALIAS" ]; then
             if [ $# -lt 2 ] || [ "~$ALIAS" = "~$2" ]; then
               DEST="$(nvm_print_implicit_alias local "$ALIAS")"
@@ -1821,8 +2082,8 @@ $NVM_LS_REMOTE_IOJS_OUTPUT" | command grep -v "N/A" | sed '/^$/d')"
 
       local VERSION
       if [ "_$PROVIDED_VERSION" = "_system" ]; then
-        if ! nvm_has_system_node && ! nvm_has_system_iojs; then
-          echo 'No system version of node or io.js detected.' >&2
+        if ! nvm_has_system_node && ! nvm_has_system_iojs && ! nvm_has_system_alinode; then
+          echo 'No system version of node or io.js or alinode detected.' >&2
           return 3
         fi
         VERSION="system"
@@ -1866,12 +2127,15 @@ $NVM_LS_REMOTE_IOJS_OUTPUT" | command grep -v "N/A" | sed '/^$/d')"
     ;;
     "unload" )
       unset -f nvm nvm_print_versions nvm_checksum \
-        nvm_iojs_prefix nvm_node_prefix \
+        nvm_iojs_prefix nvm_node_prefix nvm_alinode_prefix \
         nvm_add_iojs_prefix nvm_strip_iojs_prefix \
-        nvm_is_iojs_version nvm_is_alias \
+        nvm_add_alinode_prefix nvm_strip_alinode_prefix \
+        nvm_is_iojs_version nvm_is_alinode_version nvm_is_alias \
         nvm_ls_remote nvm_ls_remote_iojs nvm_ls_remote_iojs_org \
+        nvm_ls_remote_alinode nvm_ls_remote_alinode_org \
         nvm_ls nvm_remote_version nvm_remote_versions \
         nvm_install_iojs_binary nvm_install_node_binary \
+        nvm_install_alinode_binary \
         nvm_install_node_source \
         nvm_version nvm_rc_version nvm_match_version \
         nvm_ensure_default_set nvm_get_arch nvm_get_os \
@@ -1885,7 +2149,7 @@ $NVM_LS_REMOTE_IOJS_OUTPUT" | command grep -v "N/A" | sed '/^$/d')"
         nvm_find_nvmrc nvm_find_up nvm_tree_contains_path \
         nvm_version_greater nvm_version_greater_than_or_equal_to \
         nvm_print_npm_version nvm_npm_global_modules \
-        nvm_has_system_node nvm_has_system_iojs \
+        nvm_has_system_node nvm_has_system_iojs nvm_has_system_alinode \
         nvm_download nvm_get_latest nvm_has nvm_get_latest \
         nvm_supports_source_options > /dev/null 2>&1
       unset RC_VERSION NVM_NODEJS_ORG_MIRROR NVM_DIR NVM_CD_FLAGS > /dev/null 2>&1

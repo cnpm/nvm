@@ -31,3 +31,6 @@ UNSTABLE="$(nvm_resolve_alias unstable)"
 
 IOJS="$(nvm_resolve_alias iojs)"
 [ "_$IOJS" = "_iojs-v0.2" ] || die "'nvm_resolve_alias iojs' was not iojs-v0.2; got $IOJS"
+
+ALINODE="$(nvm_resolve_alias alinode)"
+[ "_$ALINODE" = "_alinode-v0.3" ] || die "'nvm_resolve_alias alinode' was not alinode-v0.3; got $ALINODE"
