@@ -310,8 +310,8 @@ nvm_remote_versions() {
         echo >&2 "Implicit aliases are not supported in nvm_remote_versions."
         return 1
       fi
-      VERSIONS="$(echo "$(nvm_ls_remote "$PATTERN")
-$(nvm_ls_remote_alinode "$PATTERN")
+      VERSIONS="$(echo "$(nvm_ls_remote_alinode "$PATTERN")
+$(nvm_ls_remote "$PATTERN")
 $(nvm_ls_remote_iojs "$PATTERN")" | command grep -v "N/A" | command sed '/^$/d')"
     ;;
   esac
